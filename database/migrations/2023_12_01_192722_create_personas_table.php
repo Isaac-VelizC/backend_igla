@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('ap_paterno', 50)->nullable();
             $table->string('ap_materno', 50)->nullable();
             $table->string('ci')->unique();
-            $table->enum('genero', ['Hombre', 'Mujer']);
+            $table->enum('genero', ['Hombre', 'Mujer', 'Otro']);
             $table->string('email', 55)->nullable();
             $table->string('photo', 255)->default('user.jpg');
             $table->boolean('estado')->default(true);

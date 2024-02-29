@@ -13,6 +13,7 @@ use App\Models\Personal;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Spatie\Permission\Models\Role;
 
 class UsersController extends Controller
@@ -29,7 +30,29 @@ class UsersController extends Controller
     public function allDocentes() {
         try {
             $docentes = Persona::whereHas('docente')->get();
-            return response()->json(['docentes' => $docentes], 200);
+            if ($docentes->isNotEmpty()) {
+                $formattedDocentes = $docentes->map(function ($item) {
+                    $rolesNames = implode(', ', $item->user->roles->pluck('name')->toArray());
+                    return [
+                        'id' => $item->id,
+                        'nombre' => $item->nombre,
+                        'ap_paterno' => $item->ap_paterno,
+                        'ap_materno' => $item->ap_materno,
+                        'ci' => $item->ci,
+                        'telefono' => $item->numTelefono->numero,
+                        'role' => $rolesNames,
+                        'rol' => $item->rol,
+                        'genero' => $item->genero,
+                        'photo' => $item->photo,
+                        'email' => $item->email,
+                        'estado' => $item->docente->estado
+                    ];
+                });
+    
+                return response()->json(['docentes' => $formattedDocentes], 200);
+            } else {
+                return response()->json(['error' => 'No se encontraron docentes'], 404);
+            }
         } catch (\Exception $e) {
             return response()->json(['error' => 'Error al recuperar los docentes: ' . $e->getMessage()], 500);
         }
@@ -39,7 +62,30 @@ class UsersController extends Controller
         try {
             $personals = Personal::all();
             $roles = Role::whereIn('name', ['Admin', 'Secretario/a'])->get();
-            return response()->json(['personals' => $personals, 'roles' => $roles], 200);
+            if ($personals->isNotEmpty()) {
+                $formattedpersonals = $personals->map(function ($personal) {
+                    $rolesNames = implode(', ', $personal->persona->user->roles->pluck('name')->toArray());
+                    return [
+                        'id' => $personal->persona->id,
+                        'nombre' => $personal->persona->nombre,
+                        'ap_paterno' => $personal->persona->ap_paterno,
+                        'ap_materno' => $personal->persona->ap_materno,
+                        'ci' => $personal->persona->ci,
+                        'telefono' => $personal->persona->numTelefono->numero,
+                        'role' => $rolesNames,
+                        'rol' => $personal->rol,
+                        'genero' => $personal->persona->genero,
+                        'photo' => $personal->persona->photo,
+                        'email' => $personal->persona->email,
+                        'estado' => $personal->estado,
+                        'sueldo' => $personal->sueldo,
+                        'fecha_contrato' => $personal->fecha_contratado,
+                    ];
+                });
+                return response()->json(['personals' => $formattedpersonals, 'roles' => $roles], 200);
+            } else {
+                return response()->json(['error' => 'No se encontraron docentes'], 404);
+            }
         } catch (\Exception $e) {
             return response()->json(['error' => 'Error al recuperar el personal: ' . $e->getMessage()], 500);
         }
@@ -84,6 +130,134 @@ class UsersController extends Controller
         return response()->json($estudiantes);
     }
     
+    public function gestionarEstadoEstudiante($id, $accion) {
+        $persona = Persona::find($id);
+        if ($persona) {
+            $estado = ($accion === 'baja') ? false : true;
+            $persona->update(['estado' => $estado]);
+            Estudiante::where('persona_id', $id)->update(['estado' => $estado]);    
+            $mensaje = ($accion === 'baja') ? 'Se dio de baja al estudiante' : 'Se dio de alta al estudiante';
+            return response()->json(['success' => $mensaje], 200);
+        } else {
+            return response()->json(['error' => 'No se encontró la persona'], 404);
+        }
+    }
+    
+    public function gestionarEstadoDocente($id, $accion) {
+        $persona = Persona::find($id);
+        if ($persona) {
+            $estado = ($accion === 'baja') ? false : true;
+            $persona->update(['estado' => $estado]);
+            Docente::where('id_persona', $id)->update(['estado' => $estado]);
+            $mensaje = ($accion === 'baja') ? 'Se dio de baja al docente' : 'Se dio de alta al docente';
+            return response()->json(['success' => $mensaje], 200);
+        } else {
+            return response()->json(['error' => 'No se encontró la persona'], 404);
+        }
+    }
+    
+    public function gestionarEstadoPersonal($id, $accion) {
+        $persona = Persona::find($id);
+        if ($persona) {
+            $estado = ($accion === 'baja') ? false : true;
+            $persona->update(['estado' => $estado]);
+            Personal::where('persona_id', $id)->update(['estado' => $estado]);
+            $mensaje = ($accion === 'baja') ? 'Se dio de baja al personal' : 'Se dio de alta al personal';
+            return response()->json(['success' => $mensaje], 200);
+        } else {
+            return response()->json(['error' => 'No se encontró la persona'], 404);
+        }
+    }
+    
+    public function updateDocenteInfo(Request $request, $id) {
+        try {
+            $rules = [
+                'nombre' => 'required|string|regex:/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/u',
+                'ap_paterno' => 'required|string|regex:/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/u',
+                'ap_materno' => 'nullable|string|regex:/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/u',
+                'ci' => 'required|string|regex:/^\d{7}(?:-[0-9A-Z]{1,2})?$/|unique:personas,ci,' . $id,
+                'genero' => 'required',
+                'email' => 'required|email',
+                'telefono' => 'nullable|string|regex:/^[0-9+()-]{8,15}$/',
+            ];
+            $request->validate($rules);
+            $docente = Persona::find($id);
+            if (!$docente) {
+                return response()->json(['error' => 'No se encontró al docente'], 404);
+            }
+            $docente->update([
+                'nombre' => $request->nombre,
+                'ap_paterno' => $request->ap_paterno,
+                'ap_materno' => $request->ap_materno,
+                'ci' => $request->ci,
+                'genero' => $request->genero,
+                'email' => $request->email,
+            ]);
+            if ($request->telefono) {
+                NumTelefono::updateOrCreate(
+                    ['id_persona' => $id],
+                    ['numero' => $request->telefono]
+                );
+            }
+    
+            return response()->json(['success' => 'La información se actualizó con éxito.'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Hubo un problema al actualizar la información del docente: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function store(Request $request) {
+        $rules = [
+            'nombre' => 'required|string|regex:/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/u',
+            'ap_paterno' => 'required|string|regex:/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/u',
+            'ap_materno' => 'nullable|string|regex:/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/u',
+            'ci' => 'required|string|regex:/^\d{7}(?:-[0-9A-Z]{1,2})?$/|unique:personas,ci|min:7',
+            'genero' => 'required|in:Mujer,Hombre,Otro',
+            'email' => 'required|email|unique:personas,email',
+            'telefono' => 'nullable|string|regex:/^[0-9+()-]{8,15}$/|unique:num_telefonos,numero',
+        ];
+        $validator = Validator::make($request->all(), $rules);
+        
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 422);
+        }
+
+        try {
+            $user = User::firstOrCreate(
+                ['name' => $this->generateUniqueUsername($request->nombre)],
+                ['email' => $request->email, 'password' => Hash::make('u.'.$request->ci)]
+            );
+
+            $user->assignRole('Docente');
+
+            $persona = Persona::create([
+                'user_id' => $user->id,
+                'nombre' => $request->nombre,
+                'ap_paterno' => $request->ap_paterno,
+                'ap_materno' => $request->ap_materno,
+                'ci' => $request->ci,
+                'genero' => $request->genero,
+                'email' => $request->email,
+                'rol' => 'D'
+            ]);
+
+            $persona->numTelefono()->create([
+                'numero' => $request->telefono,
+            ]);
+
+            $persona->docente()->create();
+
+            return response()->json(['success' => 'La información se guardó con éxito.'], 200);
+        } catch (\Throwable $th) {
+            return response()->json(['error' => 'Ocurrió un error. Detalles: ' . $th->getMessage()], 500);
+        }
+    }
+
+    private function generateUniqueUsername($nombre) {
+        $username = strtolower($nombre);
+        $numeroAleatorio = mt_rand(1000, 9999);
+        return $username . $numeroAleatorio;
+    }
 
 
     
@@ -91,11 +265,6 @@ class UsersController extends Controller
     public function formInscripcion() {
         $horarios = Horario::all();
         return view('admin.usuarios.estudiantes.create', compact('horarios'));
-    }
-    private function generateUniqueUsername($nombre) {
-        $username = strtolower($nombre);
-        $numeroAleatorio = mt_rand(1000, 9999);
-        return $username . $numeroAleatorio;
     }
 
     public function inscripcion(Request $request) {
@@ -198,79 +367,6 @@ class UsersController extends Controller
             return $contac->id;
         } catch (\Throwable $th) {
             return back()->with('error', 'Hubo un error en los datos del contacto. Por favor, inténtalo de nuevo. Detalles: ' . $th->getMessage());
-        }
-    }
-
-    public function store(Request $request) {
-        $rules = [
-            'nombre' => 'required|string|regex:/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/u',
-            'ap_pat' => 'required|string|regex:/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/u',
-            'ap_mat' => 'nullable|string|regex:/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/u',
-            'ci' => 'required|string|regex:/^\d{7}(?:-[0-9A-Z]{1,2})?$/|unique:personas,ci|min:7',
-            'genero' => 'required|in:Mujer,Hombre,Otro',
-            'email' => 'required|email|unique:personas,email',
-            'telefono' => 'nullable|string|regex:/^[0-9+()-]{8,15}$/|unique:num_telefonos,numero',
-        ];
-        $request->validate($rules);
-        try {
-            $user = User::firstOrCreate(
-                ['name' => $this->generateUniqueUsername($request->nombre)],
-                ['email' => $request->email, 'password' => Hash::make('u.'.$request->ci)]
-            );
-            $user->assignRole('Docente');
-            $pers = Persona::create([
-                'user_id' => $user->id,
-                'nombre' => $request->nombre,
-                'ap_paterno' => $request->ap_pat,
-                'ap_materno' => $request->ap_mat,
-                'ci' => $request->ci,
-                'genero' => $request->genero,
-                'email' => $request->email,
-                'rol' => 'D'
-            ]);
-            $pers->numTelefono()->create([
-                'numero' => $request->telefono,
-            ]);
-            $pers->docente()->create();
-            return redirect()->route('admin.docentes')->with('success', 'La información se guardo con éxito.');
-        } catch (\Throwable $th) {
-            return back()->with('error', 'Ocurrio un error. Por favor, inténtalo de nuevo. Detalles: ' . $th->getMessage());
-        }
-    }
-    public function gestionarEstadoEstudiante($id, $accion) {
-        $persona = Persona::find($id);
-        if ($persona) {
-            $estado = ($accion === 'baja') ? false : true;
-            $persona->update(['estado' => $estado]);
-            Estudiante::where('persona_id', $id)->update(['estado' => $estado]);    
-            $mensaje = ($accion === 'baja') ? 'Se dio de baja al estudiante' : 'Se dio de alta al estudiante';
-            return back()->with('success', $mensaje);
-        } else {
-            return back()->with('error', 'No se encontró la persona');
-        }
-    }    
-    public function gestionarEstadoDocente($id, $accion) {
-        $persona = Persona::find($id);
-        if ($persona) {
-            $estado = ($accion === 'baja') ? false : true;
-            $persona->update(['estado' => $estado]);
-            Docente::where('id_persona', $id)->update(['estado' => $estado]);
-            $mensaje = ($accion === 'baja') ? 'Se dio de baja al docente' : 'Se dio de alta al docente';
-            return back()->with('success', $mensaje);
-        } else {
-            return back()->with('error', 'No se encontró la persona');
-        }
-    }
-    public function gestionarEstadoPersonal($id, $accion) {
-        $persona = Persona::find($id);
-        if ($persona) {
-            $estado = ($accion === 'baja') ? false : true;
-            $persona->update(['estado' => $estado]);
-            Personal::where('persona_id', $id)->update(['estado' => $estado]);
-            $mensaje = ($accion === 'baja') ? 'Se dio de baja al personal' : 'Se dio de alta al personal';
-            return back()->with('success', $mensaje);
-        } else {
-            return back()->with('error', 'No se encontró la persona');
         }
     }
     

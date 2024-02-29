@@ -9,10 +9,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 Auth::routes();
+Route::get('check-email-unique/{email}/{id}', [AdminController::class, 'checkEmailUnique']);
+Route::get('check-ci-unique/{ci}/{id}', [AdminController::class, 'checkCiUnique']);
+Route::get('check-telefono-unique/{telefono}/{id}', [AdminController::class, 'checkTelefonoUnique']);
 
 Route::middleware(['auth:sanctum'])->group(function (){
     Route::get('auth/me', [AdminController::class, 'myInfo']);
     Route::get('auth/logout', [LoginController::class, 'logout']);
+    Route::get('auth/roles', [AdminController::class, 'getRoles']);
     
     Route::get('auth/admin-users', [AdminController::class, 'allUsers'])->name('admin.users');
     //Estudiantes
@@ -20,12 +24,19 @@ Route::middleware(['auth:sanctum'])->group(function (){
     Route::get('/show/{id}/estudiante', [UsersController::class, 'showEstudiante'])->name('admin.E.show');
     Route::post('/selectEstudi',[UsersController::class, 'selectEstudiante'])->name('search.estudiantes');
     //Docentes
-    Route::get('auth/admin-docentes', [UsersController::class, 'allDocentes'])->name('admin.docentes');
+    Route::get('auth/admin-docentes', [UsersController::class, 'allDocentes']);
+    Route::put('auth/admin-docentes/{id}/edit', [UsersController::class, 'updateDocenteInfo']);
+    Route::post('create-docentes/store', [UsersController::class, 'store']);
     //Personals
     Route::get('auth/admin-personal', [UsersController::class, 'allPersonal'])->name('admin.personal');
+    Route::post('personal-new/store', [AdminController::class, 'storePersonal'])->name('admin.personal.store');
     //Cursos
     Route::get('auth/admin-cursos', [CursoController::class, 'index'])->name('admin.cursos');
     Route::get('/admin/show/{id}', [CursoController::class, 'showCurso'])->name('admin.cursos.show');
+    //ACCIONES DE DADO DE BAJA
+    Route::delete('admin/P/{id}/{accion}', [UsersController::class, 'gestionarEstadoPersonal'])->name('admin.P.gestionarEstado');
+    Route::delete('admin/D/{id}/{accion}', [UsersController::class, 'gestionarEstadoDocente'])->name('admin.D.gestionarEstado');
+    Route::delete('admin/E/{id}/{accion}', [UsersController::class, 'gestionarEstadoEstudiante'])->name('admin.E.gestionarEstado');
     
 //***PROBAR TODOS PARA ABAJO */
     Route::get('/admin-dashboard', [AdminController::class, 'index'])->name('admin.home');
@@ -35,16 +46,7 @@ Route::middleware(['auth:sanctum'])->group(function (){
     Route::get('/admin-inscripcions', [UsersController::class, 'formInscripcion'])->name('admin.inscripcion');
     Route::post('/admin-inscripcions/store', [UsersController::class, 'inscripcion'])->name('admin.inscripcion.store');
     Route::put('/create-student-{id}-update', [UsersController::class, 'update'])->name('update.estudiantes');
-    //Docentes
-    Route::post('/create-docentes-store', [UsersController::class, 'store'])->name('store.docentes');
-    //Se usa para ambos
-    Route::delete('admin/personal/{id}/{accion}', [UsersController::class, 'gestionarEstadoPersonal'])->name('admin.P.gestionarEstado');
-    Route::delete('admin/docente/{id}/{accion}', [UsersController::class, 'gestionarEstadoDocente'])->name('admin.D.gestionarEstado');
-    Route::delete('admin/estudiante/{id}/{accion}', [UsersController::class, 'gestionarEstadoEstudiante'])->name('admin.E.gestionarEstado');
     //Personal de la institucion
-    //Route::get('/show/{id}/personal', Show::class)->name('admin.P.show');
-    Route::post('/personal-new', [AdminController::class, 'store'])->name('admin.personal.store');
-    
     //Calendario
     Route::get('/calendar', [CalendarioController::class, 'index'])->name('admin.calendario');
     Route::post('/calendar/store', [CalendarioController::class, 'store'])->name('admin.calendario.store');
